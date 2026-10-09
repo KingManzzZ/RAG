@@ -1,0 +1,14 @@
+# 环境与数据
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+cache/
+db/
+models/
+data/*
+!data/samples/
+
+# 编辑器
+.idea/
+.vscode/

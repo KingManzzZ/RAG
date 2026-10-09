@@ -1,0 +1,50 @@
+# ============================================================
+# 个人财富规划 RAG 模块 — 全局配置
+# 说明：路径均相对于本文件所在目录解析；所有切分参数与 PLAN.md 4.2 节对齐
+# ============================================================
+
+paths:
+  data_dir: ./data              # 原始知识文档目录
+  db_dir: ./db                  # Qdrant 本地数据目录
+  models_dir: ./models          # 本地模型目录（存在同名子目录时优先使用本地模型）
+  cache_dir: ./cache            # tiktoken / jieba 等缓存目录
+
+device: auto                    # auto | cuda | cpu（auto：有 NVIDIA GPU 时用 cuda，否则 cpu）
+
+embedding:
+  model: Qwen/Qwen3-Embedding-0.6B
+  dim: 1024                     # 支持 MRL 降维（如 512），变更需 --rebuild 重建
+  max_length: 8192
+  batch_size: 8
+  # Qwen3-Embedding 为 instruction-aware：仅查询侧加指令前缀，文档侧不加
+  instruct: "Given a Chinese financial question, retrieve relevant passages that answer the question"
+
+rerank:
+  enabled: true
+  model: Qwen/Qwen3-Reranker-0.6B
+  max_length: 4096
+  batch_size: 8
+  instruct: "Given a Chinese financial query, retrieve passages that answer the query"
+
+sparse:
+  method: qdrant_sparse         # qdrant_sparse（Qdrant 稀疏向量+IDF，原生 RRF）| jieba_bm25（本地 BM25+应用层 RRF）
+  k1: 1.5                       # 仅 jieba_bm25 使用（BM25 参数）
+  b: 0.75
+
+retrieval:
+  dense_top: 30                 # 稠密召回数量
+  sparse_top: 30                # 稀疏召回数量
+  fused_top: 20                 # RRF 融合后进入重排的候选数
+  final_top: 8                  # 最终返回证据块数
+  rrf_k: 60                     # RRF 常数（应用层融合时使用）
+
+chunking:
+  max_tokens: 512               # 子块上限（tiktoken cl100k_base），对齐 RAGFlow chunk_token_num 默认值
+  delimiters: "\n!?。；！？"     # 分隔符，对齐 RAGFlow naive 默认 delimiter
+  heading_max_level: 4          # H1–H4 作为结构切分边界，对齐 RAGFlow TitleChunker levels
+  overlap_tokens: 0             # 块间重叠 token 数（默认 0 对齐 naive；>0 时开启重叠）
+  breadcrumb: true              # 面包屑注入（标题路径前缀，提升嵌入与关键词匹配上下文）
+
+parsing:
+  page_break_placeholder: "<!--PAGEBREAK-->"   # PDF 页码标记（解析时插入，用于页码溯源）
+  pdf_engine: auto             # PDF 解析引擎：auto（Docling 优先，失败自动回退）| docling | pymupdf

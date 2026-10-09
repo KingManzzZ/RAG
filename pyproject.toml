@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wealth-rag"
+version = "0.1.0"
+description = "个人财富规划 Agent —— RAG 检索模块（摄入 / 切分 / 混合检索 / 重排）"
+requires-python = ">=3.10"
+dependencies = [
+  "docling>=2.0",
+  "qdrant-client>=1.12",
+  "transformers>=4.51",
+  "torch>=2.6",
+  "tiktoken>=0.7",
+  "jieba>=0.42",
+  "rank-bm25>=0.2.2",
+  "numpy>=1.26",
+  "typer>=0.12",
+  "rich>=13.0",
+  "pydantic>=2.6",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+fast = ["pymupdf>=1.24", "pymupdf4llm>=0.0.17"]
+dev = ["python-docx>=1.1", "openpyxl>=3.1", "modelscope>=1.20"]
+
+[project.scripts]
+rag = "wealth_rag.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -1,0 +1,5 @@
+// 评估集格式示例（每行一条 JSON；本文件仅作格式说明，真实评估集请另建 eval/queries.jsonl）
+// relevant 条目与检索结果的 source_path 子串 / doc_id / doc_title 任一匹配即视为命中
+{"query": "什么是再平衡策略？", "relevant": ["01_资产配置基础.md"]}
+{"query": "个人养老金账户每年缴费上限是多少？", "relevant": ["02_理财法规摘要.docx", "05_投资小词典.pdf"]}
+{"query": "货币基金和债券基金的风险收益有什么区别？", "relevant": ["03_产品对比.xlsx"]}
