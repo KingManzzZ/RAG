@@ -27,6 +27,10 @@ _MARKER_RE = re.compile(r"^<!--\s*(?P<tag>PAGEBREAK|page:\s*(?P<num>\d+))\s*-->$
 _END_DANGLING = re.compile(r"(第\s*\d+|\d+(?:\.\d+)?)\s*$")
 _NEXT_CONT = re.compile(r"^\s*(条|款|项|章|节|条第一款|％|%|年|月|日|元|万元|亿元|个基点|BP|bp)")
 
+# 英文句子边界（③ 超限兜底用）：句末标点 + 空白 + 大写/数字起始。
+# 要求句号后必须跟空白，因此「4.5%」「U.S. market」等不会被误切；中文句末标点不在此列，不受影响。
+_SENT_BOUNDARY = re.compile(r'(?<=[.!?])\s+(?=[A-Z0-9"“(])')
+
 
 @dataclass
 class _Block:
@@ -236,16 +240,42 @@ class MarkdownChunker:
             return [_Piece(text, text, "text", page)]
 
         segments = self._split_segments(text)
-        # ③ 超限兜底：单段仍超限 → 硬切分
+        # ③ 超限兜底：单段仍超限 → 先按句子边界拆分（英文），单句仍超限再硬切分
         expanded: list[str] = []
         for seg in segments:
             if self.counter.count(seg) > max_tokens:
-                expanded.extend(self.counter.hard_split(seg, max_tokens))
+                expanded.extend(self._expand_oversized(seg, max_tokens))
             else:
                 expanded.append(seg)
 
         groups = self._merge_segments(expanded)
         return [_Piece(g, g, "text", page) for g in groups]
+
+    def _expand_oversized(self, seg: str, max_tokens: int) -> list[str]:
+        """超限单元展开：优先按句子边界拆分（英文），单句仍超限时才硬切分。
+        展开后的单元由 _merge_segments 按上限重新贪心合并，保证块边界落在句子上。"""
+        sentences = self._split_sentences(seg)
+        if len(sentences) <= 1:
+            return self.counter.hard_split(seg, max_tokens)
+        units: list[str] = []
+        for sentence in sentences:
+            if self.counter.count(sentence) > max_tokens:
+                units.extend(self.counter.hard_split(sentence, max_tokens))
+            else:
+                units.append(sentence)
+        return units
+
+    @staticmethod
+    def _split_sentences(text: str) -> list[str]:
+        """按英文句子边界拆分，句间空白归属前句（与 _split_segments 同思路）。"""
+        segments: list[str] = []
+        last = 0
+        for match in _SENT_BOUNDARY.finditer(text):
+            segments.append(text[last : match.end()])
+            last = match.end()
+        if last < len(text):
+            segments.append(text[last:])
+        return [s for s in segments if s.strip()]
 
     def _split_segments(self, text: str) -> list[str]:
         """按分隔符切分，分隔符归属前一段（对齐 naive 的 delimiter 切分）。"""

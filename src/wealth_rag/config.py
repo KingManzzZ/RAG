@@ -24,7 +24,7 @@ class EmbeddingConfig(BaseModel):
     max_length: int = 8192
     batch_size: int = 8
     instruct: str = (
-        "Given a Chinese financial question, retrieve relevant passages that answer the question"
+        "Given a financial question, retrieve relevant passages that answer the question"
     )
 
 
@@ -33,7 +33,7 @@ class RerankConfig(BaseModel):
     model: str = "Qwen/Qwen3-Reranker-0.6B"
     max_length: int = 4096
     batch_size: int = 8
-    instruct: str = "Given a Chinese financial query, retrieve passages that answer the query"
+    instruct: str = "Given a financial query, retrieve passages that answer the query"
 
 
 class SparseConfig(BaseModel):

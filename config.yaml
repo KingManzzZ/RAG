@@ -17,14 +17,15 @@ embedding:
   max_length: 8192
   batch_size: 8
   # Qwen3-Embedding 为 instruction-aware：仅查询侧加指令前缀，文档侧不加
-  instruct: "Given a Chinese financial question, retrieve relevant passages that answer the question"
+  # 指令保持语言中立（中英文查询通用）
+  instruct: "Given a financial question, retrieve relevant passages that answer the question"
 
 rerank:
   enabled: true
   model: Qwen/Qwen3-Reranker-0.6B
   max_length: 4096
   batch_size: 8
-  instruct: "Given a Chinese financial query, retrieve passages that answer the query"
+  instruct: "Given a financial query, retrieve passages that answer the query"  # 语言中立（中英文查询通用）
 
 sparse:
   method: qdrant_sparse         # qdrant_sparse（Qdrant 稀疏向量+IDF，原生 RRF）| jieba_bm25（本地 BM25+应用层 RRF）

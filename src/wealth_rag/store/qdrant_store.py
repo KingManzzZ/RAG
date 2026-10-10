@@ -17,25 +17,42 @@ from ..models import Chunk
 
 COLLECTION = "chunks"
 
+# 本地模式通过文件锁独占数据库目录：同一进程内多个 QdrantStore 必须共享同一个客户端，
+# 否则「先摄入、后检索」等组合用法会因锁冲突而报错。
+_CLIENTS: dict[str, QdrantClient] = {}
+
+
+def _close_all_clients() -> None:
+    for key in list(_CLIENTS):
+        try:
+            _CLIENTS.pop(key).close()
+        except Exception:
+            pass
+
+
+atexit.register(_close_all_clients)
+
 
 class QdrantStore:
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.client = QdrantClient(path=str(settings.paths.db_dir / "qdrant"))
         self.collection = COLLECTION
         self.sparse_enabled = settings.sparse.method == "qdrant_sparse"
-        self._closed = False
-        # 本地模式在解释器退出阶段的自动清理会报噪音异常，这里提前显式关闭
-        atexit.register(self.close)
+        self._key = str((settings.paths.db_dir / "qdrant").resolve())
+        client = _CLIENTS.get(self._key)
+        if client is None:
+            client = QdrantClient(path=self._key)
+            _CLIENTS[self._key] = client
+        self.client = client
 
     def close(self) -> None:
-        if self._closed:
-            return
-        self._closed = True
-        try:
-            self.client.close()
-        except Exception:
-            pass
+        """释放本地库文件锁（同进程共享客户端时由 atexit 统一处理）。"""
+        if _CLIENTS.get(self._key) is self.client:
+            _CLIENTS.pop(self._key, None)
+            try:
+                self.client.close()
+            except Exception:
+                pass
 
     # ==================================================================
     # 建库 / 重建
