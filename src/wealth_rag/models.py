@@ -42,8 +42,8 @@ class Chunk:
 @dataclass
 class SearchResult:
     chunk_id: str
-    score: float  # 融合得分（RRF）
-    rerank_score: float | None  # 重排得分（未重排时为 None）
+    score: float  # 最终排序得分（RRF，或 RRF+重排融合后的得分）
+    rerank_score: float | None  # 重排原始分（未重排时为 None）
     text: str
     raw_text: str
     doc_id: str

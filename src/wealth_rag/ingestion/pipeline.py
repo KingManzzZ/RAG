@@ -36,8 +36,19 @@ def ingest(
     path: str | Path | None = None,
     rebuild: bool = False,
     on_file=None,
+    on_event=None,
 ) -> IngestReport:
-    """执行摄入。``on_file`` 为可选回调（用于 CLI 进度输出）。"""
+    """执行摄入。
+
+    - ``on_file(FileReport)``：单个文件处理结束时回调（成功或失败）。
+    - ``on_event(event, **data)``：阶段级进度事件，用于 CLI 进度条：
+        start(files) / load() / file_start(index,total,path) / encode(path,done,total)。
+    """
+
+    def emit(event: str, **data) -> None:
+        if on_event:
+            on_event(event, **data)
+
     data_dir = Path(path) if path else settings.paths.data_dir
     if not data_dir.is_absolute():
         data_dir = (settings.root / data_dir).resolve()
@@ -46,6 +57,7 @@ def ingest(
 
     files = discover_files(data_dir)
     report = IngestReport(rebuild=rebuild)
+    emit("start", files=len(files), rebuild=rebuild)
     if not files:
         return report
 
@@ -62,16 +74,25 @@ def ingest(
     parser = DocumentParser(settings)
     chunker = MarkdownChunker(settings)
     embedder = Qwen3Embedder(settings)
+    emit("load")
+    embedder.load()  # 提前加载，便于 CLI 显示「加载模型」阶段
 
-    for f in files:
+    total = len(files)
+    for index, f in enumerate(files):
         rel = f.relative_to(data_dir).as_posix()
         try:
+            emit("file_start", index=index, total=total, path=rel)
             parsed = parser.parse(f, data_dir)
             chunks = chunker.chunk(parsed.markdown, parsed.doc_id, parsed.source_path, parsed.title)
             if not rebuild:
                 store.delete_doc(parsed.doc_id)  # 幂等覆盖（含已删除章节的清理）
             if chunks:
-                dense = embedder.encode_documents([c.text for c in chunks])
+                dense = embedder.encode_documents(
+                    [c.text for c in chunks],
+                    on_progress=lambda done, tot, _rel=rel: emit(
+                        "encode", path=_rel, done=done, total=tot
+                    ),
+                )
                 sparse_vecs = None
                 if store.sparse_enabled:
                     sparse_vecs = [

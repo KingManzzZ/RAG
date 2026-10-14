@@ -58,9 +58,25 @@ class Retriever:
             scores = self.reranker.score(query, [x.text for x in results])
             for res, s in zip(results, scores):
                 res.rerank_score = s
-            results.sort(key=lambda x: x.rerank_score or 0.0, reverse=True)
+            self._fuse(results)
 
         return results[:final_k]
+
+    def _fuse(self, results: list[SearchResult]) -> None:
+        """RRF 与重排分融合（就地更新 ``score`` 并排序）。
+
+        - 重排最高分 ≥ rerank_floor：重排可信 → 归一化 RRF 与重排分加权融合；
+        - 否则（泛查询下重排分普遍很低、近乎噪声）：保留 RRF 排序作为保底，
+          避免重排全权推翻双路召回的结果。
+        """
+        r = self.settings.retrieval
+        max_rrf = max((x.score for x in results), default=0.0) or 1.0
+        max_rerank = max((x.rerank_score or 0.0) for x in results)
+        if max_rerank >= r.rerank_floor:
+            w = r.rerank_weight
+            for x in results:
+                x.score = (1 - w) * (x.score / max_rrf) + w * (x.rerank_score or 0.0)
+        results.sort(key=lambda x: x.score, reverse=True)
 
     # ------------------------------------------------------------------
     def _hybrid_local(self, qvec, query: str, doc_id: str | None) -> list[SearchResult]:

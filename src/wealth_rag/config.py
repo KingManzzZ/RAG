@@ -48,6 +48,8 @@ class RetrievalConfig(BaseModel):
     fused_top: int = 20
     final_top: int = 8
     rrf_k: int = 60
+    rerank_weight: float = 0.6  # 重排分在最终融合中的权重（0=纯 RRF，1=纯重排）
+    rerank_floor: float = 0.25  # 重排最高分低于该阈值 → 判定重排不可靠，退回 RRF 排序
 
 
 class ChunkingConfig(BaseModel):

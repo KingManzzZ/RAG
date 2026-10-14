@@ -52,10 +52,10 @@ class Qwen3Embedder:
         self._model = self._model.to(self.device).eval()
 
     # ------------------------------------------------------------------
-    def encode_documents(self, texts: list[str], batch_size: int | None = None) -> np.ndarray:
+    def encode_documents(self, texts: list[str], batch_size: int | None = None, on_progress=None) -> np.ndarray:
         self.load()
         bs = batch_size or self.cfg.batch_size
-        return self._encode(texts, bs)
+        return self._encode(texts, bs, on_progress=on_progress)
 
     def encode_query(self, query: str) -> np.ndarray:
         self.load()
@@ -63,10 +63,12 @@ class Qwen3Embedder:
         return self._encode([prompt], self.cfg.batch_size)[0]
 
     # ------------------------------------------------------------------
-    def _encode(self, texts: list[str], batch_size: int) -> np.ndarray:
+    def _encode(self, texts: list[str], batch_size: int, on_progress=None) -> np.ndarray:
         import torch
 
         vecs: list[np.ndarray] = []
+        total = len(texts)
+        done = 0
         for i in range(0, len(texts), batch_size):
             batch = texts[i : i + batch_size]
             inputs = self._tok(
@@ -80,6 +82,9 @@ class Qwen3Embedder:
                 out = self._model(**inputs).last_hidden_state[:, -1]
             out = torch.nn.functional.normalize(out.float()[:, : self.cfg.dim], p=2, dim=1)
             vecs.append(out.cpu().numpy())
+            done += len(batch)
+            if on_progress:
+                on_progress(done, total)
         if not vecs:
             return np.zeros((0, self.cfg.dim), dtype=np.float32)
         return np.vstack(vecs)

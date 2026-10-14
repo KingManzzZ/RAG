@@ -17,16 +17,44 @@ import jieba
 import numpy as np
 
 _TOKEN_KEEP = re.compile(r"[\w\u4e00-\u9fff]", re.UNICODE)
+_CJK_SEG = re.compile(r"[\u4e00-\u9fff]+")
+
+#: 金融领域自定义词典：强制成词，避免 jieba 把泛化词（如「理财」）与复合词
+#: （如「理财产品」）切分口径不一致，导致查询「理财」在词表中无对应词。
+_DOMAIN_WORDS = (
+    "理财", "理财产品", "个人理财", "养老金", "个人养老金", "存款保险", "基金", "股票",
+    "债券", "保险", "存款", "贷款", "利率", "汇率", "外汇", "通胀", "通货膨胀",
+    "资产配置", "风险", "收益", "征信", "反洗钱", "支付结算", "国库", "国债",
+    "投资", "金融", "储蓄", "定期存款", "活期存款", "信用卡", "借记卡",
+)
+_dict_ready = False
+
+
+def _ensure_dict() -> None:
+    """首次分词前把金融词典注入 jieba（幂等）。"""
+    global _dict_ready
+    if _dict_ready:
+        return
+    for word in _DOMAIN_WORDS:
+        jieba.add_word(word, freq=10_000_000)
+    _dict_ready = True
 
 
 def tokenize(text: str) -> list[str]:
-    """jieba 精确模式分词；过滤纯标点/空白，英文统一小写。"""
+    """jieba 精确模式分词 + 中文 2-gram；过滤纯标点/空白，英文统一小写。
+
+    加入汉字 2-gram 是为了兜底：即便 jieba 把「理财产品」切成整词，
+    查询「理财」也能借由 2-gram「理财」命中，缓解稀疏召回缺口。
+    """
+    _ensure_dict()
     tokens = []
     for tok in jieba.lcut(text):
         tok = tok.strip()
         if not tok or not _TOKEN_KEEP.search(tok):
             continue
         tokens.append(tok.lower())
+    for seg in _CJK_SEG.findall(text):
+        tokens.extend(seg[i : i + 2] for i in range(len(seg) - 1))
     return tokens
 
 

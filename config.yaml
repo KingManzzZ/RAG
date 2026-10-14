@@ -38,6 +38,8 @@ retrieval:
   fused_top: 20                 # RRF 融合后进入重排的候选数
   final_top: 8                  # 最终返回证据块数
   rrf_k: 60                     # RRF 常数（应用层融合时使用）
+  rerank_weight: 0.6            # 重排分在最终融合中的权重（0=纯 RRF，1=纯重排）
+  rerank_floor: 0.25            # 重排最高分低于该阈值 → 判定重排不可靠，退回 RRF 排序（泛查询保底）
 
 chunking:
   max_tokens: 512               # 子块上限（tiktoken cl100k_base），对齐 RAGFlow chunk_token_num 默认值

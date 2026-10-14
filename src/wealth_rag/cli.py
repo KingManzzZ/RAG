@@ -31,19 +31,60 @@ def ingest(
     config: str | None = typer.Option(None, "--config", help="配置文件路径"),
 ) -> None:
     """摄入知识文档（增量或重建）。"""
+    from rich.progress import (
+        BarColumn,
+        MofNCompleteColumn,
+        Progress,
+        SpinnerColumn,
+        TextColumn,
+        TimeElapsedColumn,
+    )
+
     from .ingestion.pipeline import ingest as run_ingest
 
     settings = _load(config)
     target = path or str(settings.paths.data_dir)
     console.print(f"[bold]开始摄入[/bold]：{target}（rebuild={rebuild}）")
 
-    def on_file(rep) -> None:
-        if rep.error:
-            console.print(f"  [red]✗ {rep.path}：{rep.error}[/red]")
-        else:
-            console.print(f"  [green]✓[/green] {rep.path} → {rep.chunks} 块")
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        MofNCompleteColumn(),
+        TimeElapsedColumn(),
+        console=console,
+    )
+    files_task = progress.add_task("[cyan]准备中", total=None)
+    encode_task = progress.add_task("[magenta]向量编码", total=None)
+    counter = {"done": 0}
 
-    report = run_ingest(settings, target, rebuild=rebuild, on_file=on_file)
+    def on_event(event: str, **data) -> None:
+        if event == "start":
+            progress.update(
+                files_task, total=data["files"] or None, completed=0, description="[cyan]解析切分"
+            )
+        elif event == "load":
+            progress.update(files_task, description="[cyan]加载嵌入模型")
+        elif event == "file_start":
+            progress.update(files_task, description=f"[cyan]{data['path']}")
+            progress.update(encode_task, total=None, completed=0)
+        elif event == "encode":
+            progress.update(encode_task, total=data["total"], completed=data["done"])
+
+    def on_file(rep) -> None:
+        counter["done"] += 1
+        progress.update(files_task, completed=counter["done"])
+        if rep.error:
+            progress.console.print(f"  [red]✗ {rep.path}：{rep.error}[/red]")
+
+    with progress:
+        report = run_ingest(
+            settings, target, rebuild=rebuild, on_file=on_file, on_event=on_event
+        )
+        progress.update(
+            files_task, total=len(report.files), completed=len(report.files), description="[cyan]完成"
+        )
+
     console.print(
         f"[bold]完成[/bold]：{report.ok_files}/{len(report.files)} 个文件，"
         f"共 {report.total_chunks} 块"
@@ -75,7 +116,7 @@ def search(
     table.add_column("来源", max_width=32, overflow="ellipsis")
     table.add_column("片段", max_width=60, overflow="ellipsis")
     for i, res in enumerate(results, start=1):
-        score = f"{res.rerank_score:.3f}" if res.rerank_score is not None else f"{res.score:.4f}"
+        score = f"{res.score:.4f}"
         snippet = " ".join(res.raw_text.split())
         tag = "" if res.chunk_type == "text" else f"[{res.chunk_type}] "
         parent = "[dim]（含父块）[/dim]" if res.parent_text else ""

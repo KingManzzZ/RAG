@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 import atexit
+import shutil
+from pathlib import Path
 
 import numpy as np
 from qdrant_client import QdrantClient, models
@@ -75,8 +77,19 @@ class QdrantStore:
         )
 
     def recreate(self) -> None:
-        if self.client.collection_exists(self.collection):
-            self.client.delete_collection(self.collection)
+        """彻底清空本地库并重建。
+
+        不能直接调用 ``client.delete_collection``：Windows 下该集合的 ``storage.sqlite``
+        仍被 sqlite 连接占用，qdrant 内部用 ``rmtree(..., ignore_errors=True)`` 会静默失败，
+        重建集合时旧数据被重新加载。这里先关闭客户端（释放文件句柄与目录锁），删除整个
+        持久化目录，再重新打开并建集合。
+        """
+        self.close()
+        qdrant_dir = Path(self._key)
+        if qdrant_dir.exists():
+            shutil.rmtree(qdrant_dir)  # 不吞异常：残留即视为失败，避免旧库静默复用
+        self.client = QdrantClient(path=self._key)
+        _CLIENTS[self._key] = self.client
         self.ensure()
 
     # ==================================================================
